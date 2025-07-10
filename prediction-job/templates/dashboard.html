@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script> 
+  <title>FIWARE MLOps Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <style>
+    .value-green { background-color: #d4edda !important; }
+    .value-yellow { background-color: #fff3cd !important; }
+    .value-red { background-color: #f8d7da !important; }
+    .flash {
+      animation: flash-bg 0.6s ease-in-out;
+    }
+    
+    @keyframes flash-bg {
+      from { background-color: #ffeaa7; }
+      to   { background-color: transparent; }
+    }
+
+  </style>
+</head>
+<body class="bg-light text-dark">
+  <div class="container py-4">
+    <h1 class="mb-4">📡 FIWARE MLOps Dashboard</h1>
+    <div class="mb-3">
+    <a class="btn btn-outline-primary" href="http://localhost:5001" target="_blank">🔗 Open MLflow</a>
+  </div>
+  <!-- Tabs -->
+  <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" data-bs-target="#train" data-bs-toggle="tab" id="train-tab" role="tab" type="button">Training</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-target="#entities" data-bs-toggle="tab" id="entities-tab" role="tab" type="button">Entities</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-target="#subs" data-bs-toggle="tab" id="subs-tab" role="tab" type="button">Subscriptions</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-target="#models" data-bs-toggle="tab" id="models-tab" role="tab" type="button">Models</button>
+    </li>
+  </ul>
+  <div class="tab-content mt-3" id="dashboardTabsContent">
+  <!-- ENTRENAMIENTO -->
+  <div class="tab-pane fade show active" id="train" role="tabpanel">
+  <h2 class="mt-4">Simulate training data</h2>
+  <div class="col-md-3">
+    <label for="experimentName" class="form-label">Name of the experiment</label>
+    <input type="text" class="form-control" id="experimentName" required>
+  </div>
+  <form id="simulate-form" class="row g-3 mb-3">
+    <div class="col-md-3">
+      <label for="startDate" class="form-label">Start date</label>
+      <input type="date" class="form-control" id="startDate" required>
+    </div>
+    <div class="col-md-3">
+      <label for="endDate" class="form-label">End date</label>
+      <input type="date" class="form-control" id="endDate" required>
+    </div>
+    <div class="col-md-3">
+      <label for="count" class="form-label">Number of samples</label>
+      <input type="number" class="form-control" id="count" value="100">
+    </div>
+    <div class="col-md-3 d-flex align-items-end">
+      <button type="submit" class="btn btn-primary w-100">Simulate</button>
+    </div>
+  </form>
+  <h2>Train model</h2>
+  <form class="row g-3" id="train-form">
+    <div class="col-md-4">
+      <label class="form-label" for="algorithm">Algorithm</label>
+      <select class="form-select" id="algorithm" name="algorithm" onchange="updateFormParams()">
+        <option value="RandomForest">Random Forest</option>
+        <option value="DecisionTree">Decision Tree</option>
+        <option value="LogisticRegression">Logistic Regression</option>
+        <option value="LinearRegression">Linear Regression</option>
+        <option value="NaiveBayes">Naive Bayes</option>
+      </select>
+    </div>
+    <div class="col-md-4" id="n_estimators_group">
+      <label class="form-label" for="n_estimators">n_estimators</label>
+      <input class="form-control" id="n_estimators" name="n_estimators" type="number" value="10"/>
+    </div>
+    <div class="col-md-4" id="max_depth_group">
+      <label class="form-label" for="max_depth">max_depth</label>
+      <input class="form-control" id="max_depth" name="max_depth" type="number" value="8"/>
+    </div>
+    <div class="col-md-4" id="max_iter_group">
+      <label class="form-label" for="max_iter">max_iter</label>
+      <input class="form-control" id="max_iter" name="max_iter" type="number" value="100"/>
+    </div>
+    <div class="col-md-4" id="c_group">
+      <label class="form-label" for="c">C (regularization)</label>
+      <input class="form-control" id="c" name="c" step="0.01" type="number" value="1.0"/>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="experiment">Experiment</label>
+      <select class="form-select" id="experiment" name="experiment">
+        <option value="">-- Select one --</option>
+      </select>
+      <button class="btn btn-danger mt-2" onclick="deleteSelectedExperiment()">🗑️ Eliminate experiment</button>
+    </div>
+    <div class="col-12">
+      <button class="btn btn-success" type="submit">Train</button>
+    </div>
+  </form>
+  
+  <h2 class="mt-4">Train status</h2>
+  <div class="border rounded p-3 bg-white shadow-sm" id="train-state">
+    <em>Loading state...</em>
+  </div>
+  <div class="mt-4" id="train-pipeline">
+  <h2>Training process</h2>
+    <ul class="list-group">
+      <li class="list-group-item" id="stage-preparing_data">🔄 Preparing data</li>
+      <li class="list-group-item" id="stage-training_model">🏗️ Training model</li>
+      <li class="list-group-item" id="stage-calculating_metrics">📊 Calculating metrics</li>
+      <li class="list-group-item" id="stage-saving_results">💾 Saved in MLflow</li>
+      <li class="list-group-item" id="stage-completed">✅ Completed</li>
+    </ul>
+  </div>
+  <h2 class="mt-4">Model evaluation</h2>
+  <div class="border rounded p-3 bg-white shadow-sm" id="train-metrics">
+    <em>Waiting for results...</em>
+  </div><div class="border rounded p-3 bg-white shadow-sm mt-3" id="train-extra">Additional training data...</div>
+  <div class="row mt-4" id="train-visuals" style="display: none;">
+  <div class="col-md-6">
+    <h4>📌 Confusion matrix</h4>
+    <img id="confusion-img" class="img-fluid border" alt="Matriz de confusión">
+  </div>
+  <div class="col-md-6">
+    <h4>📌 ROC curve</h4>
+    <img id="roc-img" class="img-fluid border" alt="Curva ROC">
+  </div>
+  </div>
+  </div>
+  <!-- ENTIDADES -->
+  <div class="tab-pane fade" id="entities" role="tabpanel">
+  <h2 class="mt-4">Cattle entity</h2>
+  <table class="table table-bordered table-striped" id="cattle-table">
+    <thead class="table-light">
+      <tr>
+        <th>Attribute</th>
+        <th>Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for attr, data in cattle.items() if attr not in ['id', 'type', '@context'] %}
+      <tr data-attr="{{ attr }}">
+        <td>{{ attr }}</td>
+        <td class="value-cell">
+          {% if data is mapping and 'value' in data %}
+            {{ data.value }}
+          {% else %}
+            {{ data }}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <h3 class="mt-4">Cattle overall status</h3>
+  <div class="row" id="health-cards">
+    <div class="col-md-4">
+      <div id="card-activity" class="card text-white text-center mb-3">
+        <div class="card-body">
+          <h5 class="card-title">Activity Ratio</h5>
+          <p class="display-5">🐄</p>
+          <p class="card-text" id="desc-activity">Loading...</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div id="card-eating" class="card text-white text-center mb-3">
+        <div class="card-body">
+          <h5 class="card-title">Eating Efficiency</h5>
+          <p class="display-5">🍽️</p>
+          <p class="card-text" id="desc-eating">Loading...</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div id="card-vital" class="card text-white text-center mb-3">
+        <div class="card-body">
+          <h5 class="card-title">Vital Signs</h5>
+          <p class="display-5">❤️</p>
+          <p class="card-text" id="desc-vital">Loading...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <h2 class="mt-4">Cattle historical data</h2>
+  <button class="btn btn-outline-secondary mb-2" onclick="toggleCattleHistory()">Show history</button>
+  <div id="history-container" class="card shadow-sm" style="display: none;">
+    <div class="card-body">
+      <table class="table table-bordered table-striped table-sm mb-0" id="history-table">
+        <thead class="table-light">
+          <tr>
+            <th>Timestamp</th>
+            <th>ID</th>
+            <th>Activity Ratio</th>
+            <th>Eating Efficiency</th>
+            <th>Vital Sign Index</th>
+            <th>Health status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- JS insertará aquí -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="mb-3">
+    <button class="btn btn-danger" onclick="resetCattleHistory()">Reset Cattle historical data</button>
+  </div>
+  <h3 class="mt-4">Make Prediction</h3>
+  <form id="predict-form" class="row g-3">
+    <div class="col-md-4">
+      <label class="form-label">Model (run_id)</label>
+      <select class="form-select" id="predict-model" required></select>
+    </div>
+    <div class="col-md-8 d-flex align-items-end">
+      <button type="submit" class="btn btn-primary w-100">Run Prediction</button>
+    </div>
+  </form>
+  <h2 class="mt-4">Prediction</h2>
+  <table class="table table-bordered table-striped">
+    <thead class="table-light">
+      <tr>
+        <th>ID</th>
+        <th>Type</th>
+        <th>Health Status</th>
+        <th>Confidence</th>
+        <th>Timestamp</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td id="p_id">{{ prediction['id'] }}</td>
+        <td id="p_type">{{ prediction['type'] }}</td>
+        <td id="p_health_status">{{ prediction['value']['value'] if prediction.get('value') else 'N/A' }}</td>
+        <td id="p_confidence">{{ prediction['confidence']['value'] if prediction.get('confidence') else 'N/A' }}</td>
+        <td id="p_timestamp">{{ prediction['timestamp']['value'] if prediction.get('timestamp') else 'N/A' }}</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <!-- SUBSCRIPCIONES -->
+  <div class="tab-pane fade" id="subs" role="tabpanel">
+  <h2 class="mt-3">Subscriptions</h2>
+  <table class="table table-bordered table-striped">
+  <thead class="table-light">
+  <tr>
+  <th>ID</th>
+  <th>Entities</th>
+  <th>Watched Attributes</th>
+  </tr>
+  </thead>
+  <tbody>
+              {% for s in subscriptions %}
+              <tr>
+  <td>{{ s.id }}</td>
+  <td>
+                  {% if s.entities %}
+                    <ul class="mb-0">
+                      {% for e in s.entities %}
+                      <li>{{ e.id }} <span class="text-muted">({{ e.type }})</span></li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    No disponible
+                  {% endif %}
+                </td>
+  <td>
+                  {{ s.watchedAttributes | join(', ') if s.watchedAttributes else 'No disponible' }}
+                </td>
+  </tr>
+              {% endfor %}
+            </tbody>
+  </table>
+  </div>
+  <!-- MODELOS MLFLOW -->
+  <div class="tab-pane fade" id="models" role="tabpanel">
+  <h2 class="mt-3">Trained models</h2>
+  <div id="models-list"><em>Loading models...</em></div>
+  </div>
+  </div>
+  </div>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      fetch("/cattle-history")
+        .then(response => response.json())
+        .then(data => {
+          const tableBody = document.querySelector("#history-table tbody");
+          data.forEach(entry => {
+            const row = document.createElement("tr");
+
+            const timestamp = document.createElement("td");
+            timestamp.textContent = new Date(entry.timestamp).toLocaleString();
+            row.appendChild(timestamp);
+
+            const id = document.createElement("td");
+            id.textContent = entry.id || "-";
+            row.appendChild(id);
+
+            const activity = document.createElement("td");
+            activity.textContent = entry.activity_ratio?.toFixed(2) ?? "-";
+            row.appendChild(activity);
+
+            const eating = document.createElement("td");
+            eating.textContent = entry.eating_efficiency?.toFixed(2) ?? "-";
+            row.appendChild(eating);
+
+            const vital = document.createElement("td");
+            vital.textContent = entry.vital_sign_index?.toFixed(2) ?? "-";
+            row.appendChild(vital);
+
+            const health = document.createElement("td");
+            health.textContent = entry.health_status ?? "-";
+            row.appendChild(health);
+
+            tableBody.appendChild(row);
+          });
+        })
+        .catch(err => console.error("Error during history loading", err));
+    });
+    
+    function showToast(message, color = "bg-success") {
+          const toastId = "toast-" + Date.now();
+          const toast = document.createElement("div");
+          toast.className = `toast align-items-center text-white ${color} border-0 show`;
+          toast.id = toastId;
+          toast.setAttribute("role", "alert");
+          toast.setAttribute("aria-live", "assertive");
+          toast.setAttribute("aria-atomic", "true");
+
+          toast.innerHTML = `
+            <div class="d-flex">
+              <div class="toast-body">${message}</div>
+              <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>`;
+
+          document.getElementById("toast-container").appendChild(toast);
+
+          setTimeout(() => {
+            toast.remove();
+          }, 5000);
+        }
+
+    const cattleThresholds = {
+      body_temperature:      { green: [37.5, 39.0], yellow: [36.5, 40.0] },
+      milk_production:       { green: [20, 40], yellow: [10, 50] },
+      respiratory_rate:      { green: [20, 40], yellow: [10, 50] },
+      walking_capacity:      { green: [8000, 20000], yellow: [5000, 8000] },
+      sleeping_duration:     { green: [4, 6], yellow: [3, 7] },
+      body_condition_score:  { green: [2, 4], yellow: [1, 5] },
+      heart_rate:            { green: [50, 70], yellow: [40, 80] },
+      eating_duration:       { green: [3, 5], yellow: [2, 6] },
+      lying_down_duration:   { green: [10, 14], yellow: [8, 16] },
+      ruminating:            { green: [5, 8], yellow: [3, 9] },
+      rumen_fill:            { green: [2, 4], yellow: [1, 5] },
+      faecal_consistency: { green: [0, 1], yellow: [2, 3] },
+      activity_ratio:       { green: [400, 800], yellow: [200, 1000] },
+      eating_efficiency:    { green: [0.5, 0.8], yellow: [0.4, 0.9] },
+      vital_sign_index:     { green: [0, 0.5], yellow: [0.5, 1.5] }
+    };
+
+    const faecalConsistencyMap = {
+      "extremely firm": 0,
+      "ideal": 1,
+      "Black faece": 2,
+      "Black faeces": 3,
+      "very liquid faeces": 4,
+      "Fresh blood in faeces": 5
+    };
+
+    function applyCattleColor(cell, attr, value) {
+      cell.classList.remove("value-green", "value-yellow", "value-red");
+
+      let numericValue = parseFloat(value);
+      if (attr === "faecal_consistency") {
+        numericValue = faecalConsistencyMap[value] ?? NaN;
+      }
+
+      if (!isNaN(numericValue) && cattleThresholds[attr]) {
+        const { green, yellow } = cattleThresholds[attr];
+
+        if (numericValue >= green[0] && numericValue <= green[1]) {
+          cell.classList.add("value-green");
+        } else if (numericValue >= yellow[0] && numericValue <= yellow[1]) {
+          cell.classList.add("value-yellow");
+        } else {
+          cell.classList.add("value-red");
+        }
+      }
+    }
+
+
+    function fetchTrainStatus() {
+      fetch('/train-status')
+        .then(res => res.json())
+        .then(data => {
+          // Estado
+          
+          let stateHtml = '';
+          if (data.status === "RUNNING") {
+            stateHtml = '<span class="text-warning"><strong>Training...</strong> <div class="spinner-border spinner-border-sm ms-2" role="status"></div></span>';
+          } else if (data.status === "FINISHED" || data.status === "Completed") {
+            stateHtml = '<span class="text-success"><strong>Completed ✅</strong></span>';
+          } else if (data.status === "FAILED") {
+            stateHtml = '<span class="text-danger"><strong>Error ❌</strong></span>';
+          } else {
+            stateHtml = `<span class="text-secondary"><strong>${data.status}</strong></span>`;
+          }
+          document.getElementById('train-state').innerHTML = stateHtml;
+
+          // Métricas
+          if (data.metrics) {
+            let metricsHtml = '<ul>';
+            for (const [k, v] of Object.entries(data.metrics)) {
+              metricsHtml += `<li><strong>${k}:</strong> ${v.toFixed(4)}</li>`;
+            }
+            metricsHtml += '</ul>';
+            document.getElementById('train-metrics').innerHTML = metricsHtml;
+            
+            const extraHtml = `
+              <p><strong>Run:</strong> ${data.run_name || '—'}</p>
+              <p><strong>Algoritmo:</strong> ${data.algorithm || '—'}</p>`;
+            document.getElementById('train-extra').innerHTML = extraHtml;
+
+            // Mostrar imágenes si la run existe
+            if (data.run_name && data.algorithm) {
+              const base = `http://localhost:5001/artifacts/${data.run_id}/artifacts`;
+              document.getElementById("confusion-img").src = data.confusion_url;
+              document.getElementById("roc-img").src = data.roc_url;
+              document.getElementById("train-visuals").style.display = "flex";
+            }
+          } else {
+            document.getElementById('train-metrics').innerHTML = '<em>No metrics available.</em>';
+            document.getElementById("train-visuals").style.display = "none";
+          }
+        })
+        .catch(() => {
+          document.getElementById('train-state').innerHTML = '<span class="text-danger">Loading state error</span>';
+          document.getElementById('train-metrics').innerHTML = '<em>Not available</em>';
+        });
+    }
+
+    function fetchMlflowRuns() {
+      fetch('/mlflow-runs')
+        .then(res => res.json())
+        .then(data => {
+          if (data.length === 0) {
+            document.getElementById('models-list').innerHTML = "<p>No registered models.</p>";
+            return;
+          }
+          let html = '<table class="table table-striped"><thead><tr><th>Algorithm</th><th>Accuracy</th><th>Date</th><th>Link</th></tr></thead><tbody>';
+          data.forEach(run => {
+            html += `<tr>
+              <td>${run.algorithm}</td>
+              <td>${run.accuracy}</td>
+              <td>${run.start_time}</td>
+              <td><a href="http://localhost:5001/#/experiments/0/runs/${run.run_id}" target="_blank">🔍 Ver</a></td>
+            </tr>`;
+          });
+          html += '</tbody></table>';
+          document.getElementById('models-list').innerHTML = html;
+        })
+        .catch(() => {
+          document.getElementById('models-list').innerHTML = '<p class="text-danger">Loading models error.</p>';
+        });
+    }
+
+    setInterval(fetchTrainStatus, 5000);
+    fetchTrainStatus();
+
+    document.getElementById('models-tab').addEventListener('click', fetchMlflowRuns);
+    
+    function updateFormParams() {
+      const selected = document.getElementById("algorithm").value;
+      const groups = {
+        n_estimators_group: ["RandomForest"],
+        max_depth_group: ["RandomForest", "DecisionTree"],
+        max_iter_group: ["LogisticRegression"],
+        c_group: ["LogisticRegression"]
+        // No params needed for LinearRegression or NaiveBayes
+      };
+    
+      for (const [id, algos] of Object.entries(groups)) {
+        const element = document.getElementById(id);
+        element.style.display = algos.includes(selected) ? "block" : "none";
+      }
+    }
+    document.addEventListener("DOMContentLoaded", updateFormParams);
+    
+
+    document.getElementById("train-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const json = {};
+    formData.forEach((value, key) => {
+      if (value !== "") json[key] = isNaN(value) ? value : Number(value);
+    });
+    json.experiment = document.getElementById("experiment").value;
+    fetch("/train", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(json)
+      }).then(() => {
+        fetchTrainStatus();
+      }).catch(() => {
+        document.getElementById('train-state').innerHTML = '<span class="text-danger">Training error</span>';
+      });
+    });
+
+  function updateField(id, newValue) {
+      const el = document.getElementById(id);
+      if (el && el.textContent !== String(newValue)) {
+        el.textContent = newValue;
+        el.classList.add("flash");
+        setTimeout(() => el.classList.remove("flash"), 600);
+      }
+    }
+
+  const fieldHistories = {
+      value: [],
+      temperature: [],
+      wind_speed: []
+    };
+
+  function addToFieldHistory(field, value) {
+      const arr = fieldHistories[field];
+      if (arr[arr.length - 1] !== value) {
+        arr.push(value);
+        if (arr.length > 10) arr.shift(); // mantén 10 como máximo
+      }
+    }
+
+  function toggleFieldHistory(field) {
+      const list = document.getElementById(`history_${field}`);
+      if (!list) return;
+
+      if (list.classList.contains("d-none")) {
+        const values = fieldHistories[field].slice().reverse();
+        list.innerHTML = values.map(v => `<li class="list-group-item py-1">${v}</li>`).join("");
+        list.classList.remove("d-none");
+      } else {
+        list.classList.add("d-none");
+      }
+    }
+  function toggleCattleHistory() {
+    const container = document.getElementById("history-container");
+    const button = event.target;
+    const visible = container.style.display !== "none";
+    container.style.display = visible ? "none" : "block";
+    button.textContent = visible ? "Show history" : "Hide history";
+  }
+
+
+  const socket = io();
+  socket.on("connect", () => console.log("Socket connected"));
+
+  socket.on("measurement_update", data => {
+    const m = data.data[0];
+    
+    const fields = {
+      value: m.value?.value,
+      temperature: m.temperature?.value,
+      wind_speed: m.wind_speed?.value
+    };
+
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined) {
+        updateField(`m_${key}`, value);
+        addToFieldHistory(key, value);
+      }
+    }
+
+    updateField("m_id", m.id || "-");
+    updateField("m_type", m.type || "-");
+    updateField("m_name", m.name?.value || "-");
+  });
+
+  socket.on("prediction_update", data => {
+    const p = data.data[0];
+    updateField("p_id", p.id || "-");
+    updateField("p_type", p.type || "-");
+    updateField("p_health_status", p.value?.value || "-");
+    updateField("p_confidence", p.confidence?.value?.toFixed(2) || "-");
+    updateField("p_timestamp", p.timestamp?.value || "-");
+  });
+
+  
+  function markStage(stageId) {
+    console.log("Loading stage:", stageId);
+    const ids = [
+      "preparing_data",
+      "training_model",
+      "calculating_metrics",
+      "saving_results",
+      "completed"
+    ];
+    let matched = false;
+    ids.forEach(id => {
+      const el = document.getElementById("stage-" + id);
+      if (el) {
+        el.classList.remove("list-group-item-success", "list-group-item-secondary");
+        if (id === stageId) {
+          el.classList.add("list-group-item-success");
+          matched = true;
+        } else {
+          el.classList.add("list-group-item-secondary");
+        }
+      }
+    });
+    if (!matched) {
+      console.warn("Stage not recognized", stageId);
+    }
+  }
+
+  socket.on("training_stage", data => {
+    console.log("Training stage: ", data);
+    markStage(data.stage);
+  });
+
+  let lastCattleData = {}; 
+
+  socket.on("cattle_update", data => {
+    const c = data.data[0];
+    lastCattleData = c; 
+    const table = document.querySelector("#cattle-table tbody");
+
+    for (const row of table.rows) {
+      const attr = row.getAttribute("data-attr");
+      const cell = row.querySelector(".value-cell");
+
+      if (c[attr] && c[attr].value !== undefined) {
+        const value = c[attr].value;
+        cell.textContent = value;
+        applyCattleColor(cell, attr, value);
+      }
+    }
+    function updateHealthCard(attr, value, thresholds, cardId, descId) {
+      const card = document.getElementById(cardId);
+      const desc = document.getElementById(descId);
+
+      if (!card || !desc || value === undefined || value === null) return;
+
+      let status = "Unknown";
+      let color = "bg-secondary";
+
+      if (value >= thresholds.green[0] && value <= thresholds.green[1]) {
+        color = "bg-success";
+        status = "✅ Healthy";
+      } else if (value >= thresholds.yellow[0] && value <= thresholds.yellow[1]) {
+        color = "bg-warning";
+        status = "⚠️ Warning";
+      } else {
+        color = "bg-danger";
+        status = "🚨 Critical";
+      }
+
+      card.className = `card text-white text-center mb-3 ${color}`;
+      desc.textContent = `${status} (${value.toFixed(2)})`;
+    }
+
+    updateHealthCard("activity_ratio", c.activity_ratio?.value, cattleThresholds.activity_ratio, "card-activity", "desc-activity");
+    updateHealthCard("eating_efficiency", c.eating_efficiency?.value, cattleThresholds.eating_efficiency, "card-eating", "desc-eating");
+    updateHealthCard("vital_sign_index", c.vital_sign_index?.value, cattleThresholds.vital_sign_index, "card-vital", "desc-vital");
+  });
+
+    function resetCattleHistory() {
+      if (!confirm("Are you sure you want to remove the history?.")) {
+        return;
+      }
+
+      fetch("/reset-cattle-history", { method: "POST" })
+        .then(res => res.json())
+        .then(data => {
+          alert(`${data.deleted_count} entries deleted.`);
+          location.reload(); // Opcional: recarga la página para refrescar el historial
+        })
+        .catch(err => {
+          console.error("error during history removal:", err);
+          alert("Error during history removal.");
+        });
+    }
+
+  document.getElementById("simulate-form").addEventListener("submit", function(e) {
+    e.preventDefault();
+    const start = document.getElementById("startDate").value;
+    const end = document.getElementById("endDate").value;
+    const count = document.getElementById("count").value;
+    const name = document.getElementById("experimentName").value;
+    fetch("/simulate-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ start, end, count, name })    })
+    .then(async res => {
+    const text = await res.text();  // <- leer como texto primero
+    try {
+      const json = JSON.parse(text); // intenta parsear
+      if (!res.ok) throw new Error(json.message || "Error desconocido del servidor");
+      return json;
+    } catch (e) {
+      throw new Error("Not valid response: " + text);
+    }
+    })
+    .then(data => {
+      showToast(`Inserted experiment: ${name}`, "bg-success");
+      loadExperiments();  // refresca el dropdown
+    })
+
+  });
+
+  function loadExperiments() {
+    fetch("/get-experiments")
+      .then(res => res.json())
+      .then(data => {
+        const select = document.getElementById("experiment");
+        select.innerHTML = '<option value="">-- Select one --</option>';
+        data.forEach(exp => {
+          select.innerHTML += `<option value="${exp.name}">${exp.name} (${exp.start} → ${exp.end})</option>`;
+        });
+      });
+  }
+
+  document.addEventListener("DOMContentLoaded", loadExperiments);
+
+  function loadModelRuns() {
+    fetch("/mlflow-runs")
+      .then(res => res.json())
+      .then(data => {
+        const select = document.getElementById("predict-model");
+        select.innerHTML = '<option value="">-- Select a model --</option>';
+        data.forEach(run => {
+          const name = run.run_name || run.algorithm;
+          select.innerHTML += `<option value="${run.run_id}">${name} (${run.start_time})</option>`;
+        });
+      });
+  }
+
+  document.addEventListener("DOMContentLoaded", loadModelRuns);
+
+
+  function deleteSelectedExperiment() {
+    const select = document.getElementById("experiment");
+    const name = select.value;
+    if (!name) {
+      alert("Select one experiment to remove.");
+      return;
+    }
+
+    if (!confirm(`Remove experiment "${name}" with its data?`)) return;
+
+    fetch("/delete-experiment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "ok") {
+          alert(`Deleted experiment "${name}" with ${data.deleted_records} entries.`);
+          loadExperiments(); // refresca el dropdown
+        } else {
+          alert("Error during removal: " + data.message);
+        }
+      })
+      .catch(err => {
+        console.error("❌ Error:", err);
+        alert("Error connecting to the server.");
+      });
+  }
+  
+  document.getElementById("predict-form").addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  const runId = document.getElementById("predict-model").value;
+  if (!runId || !lastCattleData.activity_ratio || !lastCattleData.eating_efficiency || !lastCattleData.vital_sign_index) {
+    alert("Not data or model to make prediction.");
+    return;
+  }
+
+  const cow = {
+    activity_ratio: lastCattleData.activity_ratio.value,
+    eating_efficiency: lastCattleData.eating_efficiency.value,
+    vital_sign_index: lastCattleData.vital_sign_index.value
+  };
+
+  fetch("/predict-cattle", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, cow })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.status === "ok") {
+        showToast(`Prediction: ${data.prediction} (${(data.confidence * 100).toFixed(1)}%)`, "bg-info");
+      } else {
+        alert("Error during prediction: " + data.message);
+      }
+    })
+    .catch(err => {
+      console.error("❌ Error:", err);
+      alert("❌Error connecting to server.");
+    });
+});
+
+
+
+  </script>
+  <div class="toast-container position-fixed top-0 end-0 p-3" id="toast-container"></div>
+  </body>
+</html>

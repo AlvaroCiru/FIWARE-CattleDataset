@@ -1,0 +1,116 @@
+version: "3.5"
+services:
+  mongo:
+    container_name: mongo
+    image: mongo:4.4
+    command: --nojournal
+    networks:
+      - fiware
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example
+    healthcheck:
+      test: |
+        host=`hostname --ip-address || echo '127.0.0.1'`; 
+        mongo --quiet $host/test --eval 'quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)' && echo 0 || echo 1
+
+  orion:
+    image: fiware/orion-ld:1.0.1
+    container_name: orion
+    depends_on:
+      - mongo
+    command: -dbhost mongo -dbuser root -dbpwd example #-logLevel DEBUG
+    ports:
+      - "1026:1026"
+    environment:
+      ORIONLD_MONGO_HOST: mongo
+      ORIONLD_MONGO_USER: root
+      ORIONLD_MONGO_PASSWORD: example
+      ORIONLD_MONGO_AUTH_SOURCE: admin
+    networks:
+      - fiware
+    healthcheck:
+      test: curl --fail -s http://orion:1026/version || exit 1
+
+  orion_initializer:
+    container_name: orion_initializer
+    build:
+      context: ./entities
+    depends_on:
+      - orion
+    networks:
+      - fiware
+    environment:
+      - URL_CB=http://orion:1026
+    volumes:
+      - ./entities:/entities  
+
+  mlflow-server:
+    image: ghcr.io/mlflow/mlflow:v2.0.1
+    container_name: mlflow_server
+    ports:
+      - "5001:5000"
+    command: mlflow server 
+      --host 0.0.0.0 
+      --backend-store-uri sqlite:////mlflow/mlflow.db 
+      --default-artifact-root /mlflow/artifacts
+    volumes:
+      - ./prediction-job/mlflow:/mlflow  # Monta la carpeta local en /mlflow del contenedor
+    networks:
+      - fiware
+
+  train:
+    container_name: train
+    build:
+      context: ./prediction-job
+    ports:
+      - "3000:3000"  #Flask API para el entrenamiento
+      - "4000:4000"  #Dashboard Flask
+    networks:
+      - fiware
+    environment:
+      - URL_CB=http://orion:1026
+      - FLASK_ENV=development
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5000
+    volumes:
+      - ./prediction-job/mlflow:/mlflow
+    command: >
+        sh -c "python train.py"
+
+  predict:
+    container_name: predict
+    build:
+      context: ./prediction-job
+    ports:
+      - "3001:3001"
+    networks:
+      - fiware
+    environment:
+      - URL_CB=http://orion:1026
+      - FLASK_ENV=development
+    command: python predict.py
+    volumes:
+      - ./prediction-job:/prediction-job
+
+  historicalEntities:
+    container_name: mongo_history
+    image: mongo:4.4
+    ports:
+      - "27018:27017"
+    networks:
+      - fiware
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example
+    volumes:
+      - mongo_history_data:/data/db 
+
+networks:
+  fiware:
+    external: true
+    name: fiware
+    
+volumes:
+  mongo_history_data:
