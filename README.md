@@ -13,6 +13,6 @@ http://localhost:4000
 In the dashboard you will have access to:
   - Simulate data of the Cattle Entity.
   - Train different ML models with this data.
-  - Make predictions to determine wether a cow is healthy or unhealthy (using a model previously trained).
+  - Make predictions to determine whether a cow is healthy or unhealthy (using a model previously trained).
   - Watch the different models trained.
   - Access MLFlow for further analysis.
