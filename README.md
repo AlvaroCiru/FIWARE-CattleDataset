@@ -1,38 +1,18 @@
-# FIWARE Machine Learning TinyML and MLOps - Barrier use case
+# FIWARE Machine Learning TinyML and MLOps - Cattle health analysis case
 
 Start base infraestructure
 ```
 docker compose up -d
 ```
+After initialization of the app, you can access the dashboard through your port 4000:
 
 ```
-cd airflow
-docker compose up -d
+http://localhost:4000
 ```
 
-## With Airflow as orchestrator
-
-- Access http://localhost:5000 to access MLFlow client
-
-- Access http://localhost:8080 to access the Airflow Web UI (user: airflow, password: airflow)
-
-- Initialize the dags:
-  - 1. `create_connection_dag` to create the connection to train server
-  - 2. `train_model` to train the model
-
-
-Every 20 seconds the `urn:ngsi-ld:DensityDevice:1:Measurement:1` entity is updates, orion sends a notification to the predict system, who updates the `urn:ngsi-ld:DensityDevice:1:Prediction:1`
-
-To get the entities:
-
-```
-curl localhost:1026/ngsi-ld/v1/entities/urn:ngsi-ld:DensityDevice:1:Measurement:1
-```
-
-```
-curl localhost:1026/ngsi-ld/v1/entities/urn:ngsi-ld:DensityDevice:1:Prediction:1
-```
-
-```
-curl localhost:1026/ngsi-ld/v1/subscriptions
-```
+In the dashboard you will have access to:
+  - Simulate data of the Cattle Entity.
+  - Train different ML models with this data.
+  - Make predictions to determine whether a cow is healthy or unhealthy (using a model previously trained).
+  - Watch the different models trained.
+  - Access MLFlow for further analysis.
