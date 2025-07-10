@@ -4,7 +4,7 @@ Start base infraestructure
 ```
 docker compose up -d
 ```
-After initializacion of the app, you can acces the dashboard through your port 4000:
+After initialization of the app, you can access the dashboard through your port 4000:
 
 ```
 http://localhost:4000
