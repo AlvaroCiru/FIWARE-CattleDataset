@@ -9,7 +9,11 @@ import random
 
 df = pd.read_excel('./cattle_dataset.xlsx')
 
-ORION_URL = 'http://orion:1026/ngsi-ld/v1/entities/urn:ngsi-ld:Cattle:001/attrs'
+def get_random_entity_url():
+    random_id = random.randint(1, 10)
+    urn = f"urn:ngsi-ld:Cattle:{random_id:03d}"
+    return f"http://orion:1026/ngsi-ld/v1/entities/{urn}/attrs"
+
 HEADERS = {'Content-Type': 'application/ld+json'}
 
 attribute_mapping = {
@@ -106,7 +110,8 @@ while True:
     row = perturb_row(df.sample(1).iloc[0])
     data = build_payload(row)
     try:
-        response = requests.patch(ORION_URL, headers=HEADERS, data=json.dumps(data))
+        entity_url = get_random_entity_url()
+        response = requests.patch(entity_url, headers=HEADERS, data=json.dumps(data))
         print(f"[{datetime.now().isoformat()}] PATCH status: {response.status_code}")
         if response.status_code != 204:
             print(f"PATCH failed: {response.text}")

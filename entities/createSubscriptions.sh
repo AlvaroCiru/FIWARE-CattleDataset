@@ -1,12 +1,13 @@
 curl orion:1026/ngsi-ld/v1/subscriptions/ -s -S -H 'Content-Type: application/ld+json' -d @- <<EOF
 {
-  "description": "Notifica cambios en la entidad de Cattle",
+  "description": "Notify changes on all cattle entities",
   "type": "Subscription",
   "entities": [{
-    "id": "urn:ngsi-ld:Cattle:001",
+    "idPattern": "urn:ngsi-ld:Cattle:.*",
     "type": "Animal"
   }],
   "watchedAttributes": [
+    "name",
     "body_temperature",
     "milk_production",
     "respiratory_rate",
@@ -36,6 +37,7 @@ curl orion:1026/ngsi-ld/v1/subscriptions/ -s -S -H 'Content-Type: application/ld
   ]
 }
 EOF
+
 
 curl orion:1026/ngsi-ld/v1/subscriptions/ -s -S -H 'Content-Type: application/ld+json' -d @- <<EOF
 {

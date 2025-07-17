@@ -32,6 +32,7 @@ import shutil
 from flask import send_from_directory
 from pymongo import MongoClient
 from datetime import datetime, timezone
+from dateutil import parser
 
 
 ORION_URL = "http://orion:1026/ngsi-ld/v1"
@@ -145,11 +146,62 @@ def train(**params):
     warnings.filterwarnings("ignore")
     np.random.seed(40)
 
-    # Extraer el algoritmo y construir parámetros
     algorithm = params.get("algorithm", "RandomForest")
+    model_name = params.get("model_name", "UnnamedModel")
+    start_date = params.get("start_date")
+    end_date = params.get("end_date")
+    start_date_str = params.get("start_date")
+    end_date_str = params.get("end_date")
+
+
+    if not start_date or not end_date:
+        raise ValueError("Start and end dates are required.")
+
+    try:
+        start = datetime.strptime(start_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        end = datetime.strptime(end_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except Exception as e:
+        raise ValueError(f"Invalid date format: {e}")
+
+    print(f"📅 Training with range: {start} to {end} | Model name: {model_name}")
+
+    # Extract records from MongoDB within date range
+    query = {
+        "timestamp": {
+            "$gte": start,
+            "$lte": end
+        }
+    }
+    records = list(history_collection.find(query))
+    print(f"Querying history from {start} to {end}, records found: {len(records)}")
+
+
+
+    if not records:
+        raise ValueError("No historical data found for the selected date range.")
+
+    df = pd.DataFrame(records)
+    df.drop(columns=["_id", "id", "type", "timestamp", "name"], errors="ignore", inplace=True)
+
+    if "health_status" not in df.columns:
+        raise ValueError("Missing 'health_status' column in data.")
+
+    df = df[df["health_status"].notnull()]
+    df["health_status"] = df["health_status"].apply(lambda x: 1 if x == "unhealthy" else 0)
+
+    required_features = ["activity_ratio", "eating_efficiency", "vital_sign_index"]
+    for f in required_features:
+        if f not in df.columns:
+            raise ValueError(f"Missing required feature: {f}")
+
+    df.dropna(subset=required_features, inplace=True)
+
+    X = df[required_features]
+    y = df["health_status"]
+    train_data, test_data = train_test_split(df, test_size=0.2, random_state=40)
+
+    # Build model
     model_params = {}
-    
-    emit_stage("preparing_data")    
     if algorithm == "RandomForest":
         model_params["n_estimators"] = int(params.get("n_estimators", 10))
         model_params["max_depth"] = int(params.get("max_depth", 8))
@@ -158,126 +210,80 @@ def train(**params):
     elif algorithm == "LogisticRegression":
         model_params["max_iter"] = int(params.get("max_iter", 100))
         model_params["C"] = float(params.get("c", 1.0))
-
-    # Datos
-    experiment_name = params.get("experiment", None)
-
-    if experiment_name:
-        print(f"📡 Usando datos de experimento: {experiment_name}")
-        records = list(history_collection.find({"experiment_name": experiment_name}))
-        if not records:
-            raise ValueError(f"No se encontraron datos para el experimento '{experiment_name}'")
-        data = pd.DataFrame(records)
     else:
-        print("📄 Usando archivo por defecto: barrier_complete.csv")
-        data = pd.read_csv(os.path.join(os.path.dirname(__file__), "barrier_complete.csv"), sep=",")
-        train_data, test_data = train_test_split(data, test_size=0.2, random_state=40)
+        raise ValueError(f"Unsupported algorithm: {algorithm}")
 
-    required_features = ["activity_ratio", "eating_efficiency", "vital_sign_index"]
-    target_column = "health_status"
-
-    if target_column not in data.columns:
-        raise ValueError("El conjunto de datos no tiene columna 'health_status' para usar como variable objetivo.")
-
-    # Opcional: binariza la clase para clasificación
-    data = data[data[target_column].notnull()]
-    data[target_column] = data[target_column].apply(lambda x: 1 if x == "unhealthy" else 0)
-
-    train_data, test_data = train_test_split(data, test_size=0.2, random_state=40)
-    features = required_features
-
-
-    # MLflow
     mlflow.set_tracking_uri("http://mlflow-server:5000")
     mlflow.set_experiment("FIWARE_MLOPS_TINYML")
-    run_name = f"{params.get('experiment', 'default')}_{algorithm}"
+    run_name = f"{model_name}_{algorithm}"
+
     with mlflow.start_run(run_name=run_name) as run:
         last_run_id = run.info.run_id
         with tempfile.TemporaryDirectory() as tmp_dir:
-
             emit_stage("training_model")
             model = get_model(algorithm, **model_params)
-            start = time.time_ns() / 1e6
-            model.fit(train_data[features], train_data[target_column])
-            end = time.time_ns() / 1e6
+            start_ms = time.time_ns() / 1e6
+            model.fit(train_data[required_features], train_data["health_status"])
+            end_ms = time.time_ns() / 1e6
 
             emit_stage("calculating_metrics")
-            #preds = model.predict(test_data[features])
-            #acc, prec, rec, f1 = eval_metrics(test_data[target_column], preds)
-
-            y_test = test_data[target_column]
-            y_pred = model.predict(test_data[features])
-
-            # Métricas básicas
+            y_test = test_data["health_status"]
+            y_pred = model.predict(test_data[required_features])
             acc, prec, rec, f1 = eval_metrics(y_test, y_pred)
 
-            # Guardar matriz de confusión
-            # Etiquetas con nombres legibles
-            labels = ["healthy", "unhealthy"]
-
-            # Matriz normalizada por filas (recall por clase)
+            # Confusion matrix
             cm = confusion_matrix(y_test, y_pred, normalize="true")
-
             fig, ax = plt.subplots(figsize=(6, 5))
-            disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
-            disp.plot(cmap="Greens", ax=ax, colorbar=True)
-
-            # Formato de texto en celdas como porcentajes
-            for text in ax.texts:
+            disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["healthy", "unhealthy"])
+            disp.plot(cmap="Greens", ax=ax)
+            for t in ax.texts:
                 try:
-                    text.set_text(f"{float(text.get_text()):.2f}")
+                    t.set_text(f"{float(t.get_text()):.2f}")
                 except ValueError:
                     pass
-
-            ax.set_title("Normalized Confusion Matrix")
             plt.tight_layout()
             cm_path = os.path.join(tmp_dir, "confusion_matrix.png")
             plt.savefig(cm_path)
-            plt.close()
+            mlflow.log_artifact(cm_path)
+            shutil.copy(cm_path, os.path.join(output_dir, f"{run.info.run_id}_confusion_matrix.png"))
 
-
-            # ROC y AUC (solo si es clasificación binaria y modelo tiene predict_proba)
-            if hasattr(model, "predict_proba") and len(np.unique(y_test)) == 2:
+            # ROC
+            if hasattr(model, "predict_proba"):
                 try:
-                    y_score = model.predict_proba(test_data[features])[:, 1]
+                    y_score = model.predict_proba(test_data[required_features])[:, 1]
                     fpr, tpr, _ = roc_curve(y_test, y_score)
                     auc = roc_auc_score(y_test, y_score)
-                    
                     plt.figure()
-                    plt.plot(fpr, tpr, label=f"ROC curve (AUC = {auc:.2f})")
+                    plt.plot(fpr, tpr, label=f"AUC = {auc:.2f}")
                     plt.plot([0, 1], [0, 1], "k--")
-                    plt.xlabel("False Positive Rate")
-                    plt.ylabel("True Positive Rate")
-                    plt.title("Curva ROC")
-                    plt.legend(loc="lower right")
+                    plt.title("ROC Curve")
+                    plt.legend()
                     roc_path = os.path.join(tmp_dir, "roc_curve.png")
                     plt.savefig(roc_path)
-                    plt.close()
                     mlflow.log_artifact(roc_path)
+                    shutil.copy(roc_path, os.path.join(output_dir, f"{run.info.run_id}_roc_curve.png"))
                     mlflow.log_metric("roc_auc", auc)
                 except Exception as e:
-                    print("⚠️ No se pudo generar la curva ROC:", e)
-            # Copia la imagen
-            shutil.copy(cm_path, os.path.join(output_dir, f"{run.info.run_id}_confusion_matrix.png"))
-            shutil.copy(roc_path, os.path.join(output_dir, f"{run.info.run_id}_roc_curve.png"))
+                    print("⚠️ ROC generation failed:", e)
+
             model_file = os.path.join(tmp_dir, f"{algorithm}_model.joblib")
             dump(model, model_file)
-
-            emit_stage("saving_results")
-            mlflow.log_param("algorithm", algorithm)
-            for key, value in model_params.items():
-                mlflow.log_param(key, value)
-
             mlflow.sklearn.log_model(model, artifact_path="model")
+            mlflow.log_param("algorithm", algorithm)
+            mlflow.log_param("model_name", model_name)
+            mlflow.log_param("start_date", start_date)
+            mlflow.log_param("end_date", end_date)
+            for k, v in model_params.items():
+                mlflow.log_param(k, v)
 
             mlflow.log_metric("accuracy", acc)
-            mlflow.log_metric("f1_score", f1)
             mlflow.log_metric("precision", prec)
             mlflow.log_metric("rec", rec)
-            mlflow.log_metric("train_time_ms", end - start)
+            mlflow.log_metric("f1_score", f1)
+            mlflow.log_metric("train_time_ms", end_ms - start_ms)
             mlflow.log_artifact(model_file)
 
-            # Intentar convertir y loggear modelo tiny (solo si aplica)
+            # Emlearn export
             if is_emlearn_compatible(model, algorithm):
                 try:
                     cmodel = emlearn.convert(model)
@@ -286,7 +292,6 @@ def train(**params):
                     result_path = os.path.join(tmp_dir, "result")
                     generateCcode(tmp_dir, h_path, result_path)
                     exe_path = os.path.join(tmp_dir, "code")
-
                     mlflow.log_artifact(h_path)
                     if os.path.exists(result_path):
                         mlflow.log_artifact(result_path)
@@ -295,11 +300,11 @@ def train(**params):
                         size_kb = os.path.getsize(exe_path) / 1024
                         mlflow.log_metric("model_size_kb", size_kb)
                 except Exception as e:
-                    print(f"❌ Fallo al compilar modelo Emlearn: {e}")
-            else:
-                print(f"⚠️ El modelo {algorithm} no es compatible con Emlearn. Se omite conversión.")
-            
+                    print(f"❌ Emlearn export failed: {e}")
+
     emit_stage("completed")
+
+
 
 
 
@@ -308,8 +313,23 @@ def train(**params):
 @app.route('/train', methods=['POST'])
 def train_model():
     data = request.get_json()
-    train_with_params(**data)
-    return jsonify({'message': 'Entrenamiento lanzado con parámetros personalizados'})
+
+    required = ["model_name", "start_date", "end_date", "algorithm"]
+    if not all(k in data for k in required):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        train(
+            model_name=data["model_name"],
+            start_date=data["start_date"],
+            end_date=data["end_date"],
+            algorithm=data["algorithm"],
+            **{k: v for k, v in data.items() if k not in required}
+        )
+        return jsonify({"message": "Model training started successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 # Endpoint de etado de entrenamiento
 @app.route('/train-status', methods=['GET'])
@@ -380,6 +400,7 @@ def mlflow_runs():
     for run in runs:
         formatted.append({
             "run_id": run.info.run_id,
+            "run_name": run.data.tags.get("mlflow.runName", "Unnamed"),
             "algorithm": run.data.params.get("algorithm", "N/A"),
             "accuracy": run.data.metrics.get("accuracy_big", run.data.metrics.get("accuracy", "N/A")),
             "start_time": datetime.fromtimestamp(run.info.start_time / 1000).strftime("%Y-%m-%d %H:%M:%S"),
@@ -433,26 +454,33 @@ def notify_cattle():
     socketio.emit("cattle_update", data)
 
     try:
-        print("📥 Datos Cattle recibidos:", json.dumps(data, indent=2))
         cattle_data = data["data"][0]
 
+        # Use timestamp from the payload if it exists
+        ts = datetime.now(timezone.utc)  # fallback
+        if "timestamp" in cattle_data and "value" in cattle_data["timestamp"]:
+            ts = parser.isoparse(cattle_data["timestamp"]["value"])
+
         record = {
-            "timestamp": datetime.now(timezone.utc),
+            "timestamp": ts,
         }
 
         for key, val in cattle_data.items():
+            if key == "timestamp":
+                continue  # already handled
             if isinstance(val, dict) and "value" in val:
                 record[key] = val["value"]
             else:
-                record[key] = val  # fallback por si es un valor plano
+                record[key] = val
 
         history_collection.insert_one(record)
-        print(f"✅ Insertado historial de vaca con _id: {record.get('_id')}")
+        print(f"✅ Inserted cattle record with timestamp: {ts}")
 
     except Exception as e:
-        print("❌ Error al guardar historial de vaca:", e)
+        print("❌ Error saving cattle history:", e)
 
     return "", 204
+
 
 @app.route("/simulate-data", methods=["POST"])
 def simulate_data():

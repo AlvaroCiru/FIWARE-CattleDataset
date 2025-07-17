@@ -25,4 +25,4 @@ RUN pip install --upgrade pip && \
     pip install pandas openpyxl requests
 
 # Comando principal
-CMD ["sh", "-c", "sh awaitForOrion.sh && sh createPredictionEntities.sh && sh createSubscriptions.sh && python updateCowEntityLoop.py"]
+CMD ["sh", "-c", "sh awaitForOrion.sh && bash createCattleEntities.sh && sh createSubscriptions.sh && bash send_measurements_live.sh && python updateCowEntityLoop.py"]

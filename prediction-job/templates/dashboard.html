@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="es">
 <head>
   <meta charset="utf-8"/>
@@ -15,22 +14,20 @@
     .flash {
       animation: flash-bg 0.6s ease-in-out;
     }
-    
     @keyframes flash-bg {
       from { background-color: #ffeaa7; }
       to   { background-color: transparent; }
     }
-
   </style>
 </head>
 <body class="bg-light text-dark">
   <div class="container py-4">
     <h1 class="mb-4">📡 FIWARE MLOps Dashboard</h1>
     <div class="mb-3">
-    <a class="btn btn-outline-primary" href="http://localhost:5001" target="_blank">🔗 Open MLflow</a>
-  </div>
-  <!-- Tabs -->
-  <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+      <a class="btn btn-outline-primary" href="http://localhost:5001" target="_blank">🔗 Open MLflow</a>
+    </div>
+
+<ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
     <li class="nav-item" role="presentation">
       <button class="nav-link active" data-bs-target="#train" data-bs-toggle="tab" id="train-tab" role="tab" type="button">Training</button>
     </li>
@@ -47,67 +44,41 @@
   <div class="tab-content mt-3" id="dashboardTabsContent">
   <!-- ENTRENAMIENTO -->
   <div class="tab-pane fade show active" id="train" role="tabpanel">
-  <h2 class="mt-4">Simulate training data</h2>
-  <div class="col-md-3">
-    <label for="experimentName" class="form-label">Name of the experiment</label>
-    <input type="text" class="form-control" id="experimentName" required>
-  </div>
-  <form id="simulate-form" class="row g-3 mb-3">
-    <div class="col-md-3">
-      <label for="startDate" class="form-label">Start date</label>
-      <input type="date" class="form-control" id="startDate" required>
-    </div>
-    <div class="col-md-3">
-      <label for="endDate" class="form-label">End date</label>
-      <input type="date" class="form-control" id="endDate" required>
-    </div>
-    <div class="col-md-3">
-      <label for="count" class="form-label">Number of samples</label>
-      <input type="number" class="form-control" id="count" value="100">
-    </div>
-    <div class="col-md-3 d-flex align-items-end">
-      <button type="submit" class="btn btn-primary w-100">Simulate</button>
-    </div>
-  </form>
-  <h2>Train model</h2>
-  <form class="row g-3" id="train-form">
+  <h2>Train New Model</h2>
+  <form id="train-form" class="row g-3">
     <div class="col-md-4">
-      <label class="form-label" for="algorithm">Algorithm</label>
-      <select class="form-select" id="algorithm" name="algorithm" onchange="updateFormParams()">
+      <label for="modelName" class="form-label">Model Name</label>
+      <input type="text" class="form-control" id="modelName" name="modelName" required>
+    </div>
+
+    <div class="col-md-4">
+      <label for="startDate" class="form-label">Start Date</label>
+      <input type="date" class="form-control" id="startDate" name="startDate" min="2024-07-01" max="2025-07-01" required>
+    </div>
+
+    <div class="col-md-4">
+      <label for="endDate" class="form-label">End Date</label>
+      <input type="date" class="form-control" id="endDate" name="endDate" min="2024-07-01" max="2025-07-01" required>
+    </div>
+
+    <div class="col-md-4">
+      <label for="algorithm" class="form-label">Algorithm</label>
+      <select class="form-select" id="algorithm" name="algorithm" required>
         <option value="RandomForest">Random Forest</option>
         <option value="DecisionTree">Decision Tree</option>
         <option value="LogisticRegression">Logistic Regression</option>
-        <option value="LinearRegression">Linear Regression</option>
-        <option value="NaiveBayes">Naive Bayes</option>
       </select>
     </div>
-    <div class="col-md-4" id="n_estimators_group">
-      <label class="form-label" for="n_estimators">n_estimators</label>
-      <input class="form-control" id="n_estimators" name="n_estimators" type="number" value="10"/>
+
+    <div id="params-container" class="col-md-8">
+      <!-- Algorithm parameters will be dynamically added here -->
     </div>
-    <div class="col-md-4" id="max_depth_group">
-      <label class="form-label" for="max_depth">max_depth</label>
-      <input class="form-control" id="max_depth" name="max_depth" type="number" value="8"/>
-    </div>
-    <div class="col-md-4" id="max_iter_group">
-      <label class="form-label" for="max_iter">max_iter</label>
-      <input class="form-control" id="max_iter" name="max_iter" type="number" value="100"/>
-    </div>
-    <div class="col-md-4" id="c_group">
-      <label class="form-label" for="c">C (regularization)</label>
-      <input class="form-control" id="c" name="c" step="0.01" type="number" value="1.0"/>
-    </div>
-    <div class="col-md-4">
-      <label class="form-label" for="experiment">Experiment</label>
-      <select class="form-select" id="experiment" name="experiment">
-        <option value="">-- Select one --</option>
-      </select>
-      <button class="btn btn-danger mt-2" onclick="deleteSelectedExperiment()">🗑️ Eliminate experiment</button>
-    </div>
+
     <div class="col-12">
-      <button class="btn btn-success" type="submit">Train</button>
+      <button type="submit" class="btn btn-primary">Train Model</button>
     </div>
   </form>
+
   
   <h2 class="mt-4">Train status</h2>
   <div class="border rounded p-3 bg-white shadow-sm" id="train-state">
@@ -216,38 +187,23 @@
   </div>
   <div class="mb-3">
     <button class="btn btn-danger" onclick="resetCattleHistory()">Reset Cattle historical data</button>
-  </div>
-  <h3 class="mt-4">Make Prediction</h3>
-  <form id="predict-form" class="row g-3">
-    <div class="col-md-4">
-      <label class="form-label">Model (run_id)</label>
-      <select class="form-select" id="predict-model" required></select>
-    </div>
-    <div class="col-md-8 d-flex align-items-end">
-      <button type="submit" class="btn btn-primary w-100">Run Prediction</button>
-    </div>
-  </form>
-  <h2 class="mt-4">Prediction</h2>
-  <table class="table table-bordered table-striped">
-    <thead class="table-light">
-      <tr>
-        <th>ID</th>
-        <th>Type</th>
-        <th>Health Status</th>
-        <th>Confidence</th>
-        <th>Timestamp</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td id="p_id">{{ prediction['id'] }}</td>
-        <td id="p_type">{{ prediction['type'] }}</td>
-        <td id="p_health_status">{{ prediction['value']['value'] if prediction.get('value') else 'N/A' }}</td>
-        <td id="p_confidence">{{ prediction['confidence']['value'] if prediction.get('confidence') else 'N/A' }}</td>
-        <td id="p_timestamp">{{ prediction['timestamp']['value'] if prediction.get('timestamp') else 'N/A' }}</td>
-      </tr>
-    </tbody>
-  </table>
+  </div>    <!-- We'll simplify to show the fix example -->
+
+    <!-- Models list for prediction -->
+    <h4 class="mt-3">📊 Real-Time Model Predictions</h4>
+    <table class="table table-bordered table-striped">
+      <thead class="table-light">
+        <tr>
+          <th>Model Name</th>
+          <th>Algorithm</th>
+          <th>Prediction</th>
+          <th>Confidence</th>
+        </tr>
+      </thead>
+      <tbody id="prediction-table">
+        <!-- Rows will be injected dynamically -->
+      </tbody>
+    </table>
   </div>
   <!-- SUBSCRIPCIONES -->
   <div class="tab-pane fade" id="subs" role="tabpanel">
@@ -291,7 +247,12 @@
   </div>
   </div>
   <script>
-    document.addEventListener("DOMContentLoaded", function () {
+    
+    let trainedModels = [];
+    let lastCattleData = {};
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const predictionTable = document.querySelector("#prediction-table");
       fetch("/cattle-history")
         .then(response => response.json())
         .then(data => {
@@ -327,8 +288,142 @@
           });
         })
         .catch(err => console.error("Error during history loading", err));
+
+      function loadModels() {
+        fetch("/mlflow-runs")
+          .then(res => res.json())
+          .then(data => {
+            trainedModels = data || [];
+            predictionTable.innerHTML = "";
+
+            trainedModels.forEach(model => {
+              const row = document.createElement("tr");
+              row.id = `prediction-row-${model.run_id}`;
+              row.innerHTML = `
+                <td>${model.run_name || "Unnamed"}</td>
+                <td>${model.algorithm}</td>
+                <td id="pred-${model.run_id}">-</td>
+                <td id="conf-${model.run_id}">-</td>
+              `;
+              predictionTable.appendChild(row);
+            });
+          });
+      }
+
+      loadModels();
     });
     
+    document.addEventListener("DOMContentLoaded", () => {
+      fetchMlflowRuns();
+      const modelsTab = document.querySelector('#models-tab');
+      if (modelsTab) {
+        modelsTab.addEventListener('shown.bs.tab', fetchMlflowRuns);
+      }
+    });
+
+
+    document.getElementById('algorithm').addEventListener('change', function () {
+      const container = document.getElementById('params-container');
+      const selected = this.value;
+      container.innerHTML = '';
+
+      if (selected === 'RandomForest') {
+        container.innerHTML += `
+          <div class="mb-3">
+            <label class="form-label">n_estimators</label>
+            <input type="number" class="form-control" name="n_estimators" value="10">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">max_depth</label>
+            <input type="number" class="form-control" name="max_depth" value="8">
+          </div>`;
+      } else if (selected === 'DecisionTree') {
+        container.innerHTML += `
+          <div class="mb-3">
+            <label class="form-label">max_depth</label>
+            <input type="number" class="form-control" name="max_depth" value="8">
+          </div>`;
+      } else if (selected === 'LogisticRegression') {
+        container.innerHTML += `
+          <div class="mb-3">
+            <label class="form-label">max_iter</label>
+            <input type="number" class="form-control" name="max_iter" value="100">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">C</label>
+            <input type="number" class="form-control" name="c" value="1.0" step="0.1">
+          </div>`;
+      }
+    });
+
+    document.getElementById('train-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const formData = new FormData(this);
+      const payload = {
+        model_name: formData.get('modelName'),
+        start_date: formData.get('startDate'),
+        end_date: formData.get('endDate'),
+        algorithm: formData.get('algorithm'),
+      };
+
+      for (const [key, value] of formData.entries()) {
+        if (!['modelName', 'startDate', 'endDate', 'algorithm'].includes(key)) {
+          payload[key] = isNaN(value) ? value : Number(value);
+        }
+      }
+
+      const res = await fetch('/train', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      alert(data.message || 'Model training started!');
+    });
+
+    function waitForPredictionCells(callback, attempts = 10) {
+          const allReady = trainedModels.every(model =>
+            document.getElementById(`pred-${model.run_id}`) &&
+            document.getElementById(`conf-${model.run_id}`)
+          );
+
+          if (allReady) {
+            callback();
+          } else if (attempts > 0) {
+            setTimeout(() => waitForPredictionCells(callback, attempts - 1), 100);
+          } else {
+            console.warn("Prediction DOM elements did not render in time.");
+          }
+        }
+
+    function updatePredictionTable(cattle) {
+      if (!cattle || !trainedModels.length) return;
+
+      const cow = {
+        activity_ratio: cattle.activity_ratio?.value,
+        eating_efficiency: cattle.eating_efficiency?.value,
+        vital_sign_index: cattle.vital_sign_index?.value
+      };
+
+      trainedModels.forEach(model => {
+        fetch("/predict-cattle", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ run_id: model.run_id, cow })
+        })
+          .then(res => res.json())
+          .then(data => {
+            const predCell = document.getElementById(`pred-${model.run_id}`);
+            const confCell = document.getElementById(`conf-${model.run_id}`);
+            if (predCell) predCell.textContent = data.prediction || "❌";
+            if (confCell) confCell.textContent = data.confidence ? (data.confidence * 100).toFixed(1) + "%" : "-";
+          })
+          .catch(err => console.error(`Prediction error for ${model.run_id}`, err));
+      });
+    }
+
     function showToast(message, color = "bg-success") {
           const toastId = "toast-" + Date.now();
           const toast = document.createElement("div");
@@ -350,7 +445,7 @@
             toast.remove();
           }, 5000);
         }
-
+      
     const cattleThresholds = {
       body_temperature:      { green: [37.5, 39.0], yellow: [36.5, 40.0] },
       milk_production:       { green: [20, 40], yellow: [10, 50] },
@@ -398,7 +493,6 @@
         }
       }
     }
-
 
     function fetchTrainStatus() {
       fetch('/train-status')
@@ -478,47 +572,29 @@
     setInterval(fetchTrainStatus, 5000);
     fetchTrainStatus();
 
-    document.getElementById('models-tab').addEventListener('click', fetchMlflowRuns);
-    
     function updateFormParams() {
-      const selected = document.getElementById("algorithm").value;
+      const algorithmEl = document.getElementById("algorithm");
+      if (!algorithmEl) return;
+
+      const selected = algorithmEl.value;
       const groups = {
         n_estimators_group: ["RandomForest"],
         max_depth_group: ["RandomForest", "DecisionTree"],
         max_iter_group: ["LogisticRegression"],
         c_group: ["LogisticRegression"]
-        // No params needed for LinearRegression or NaiveBayes
       };
-    
+
       for (const [id, algos] of Object.entries(groups)) {
         const element = document.getElementById(id);
-        element.style.display = algos.includes(selected) ? "block" : "none";
+        if (element) {
+          element.style.display = algos.includes(selected) ? "block" : "none";
+        }
       }
     }
+
     document.addEventListener("DOMContentLoaded", updateFormParams);
-    
 
-    document.getElementById("train-form").addEventListener("submit", function (e) {
-    e.preventDefault();
-
-    const formData = new FormData(this);
-    const json = {};
-    formData.forEach((value, key) => {
-      if (value !== "") json[key] = isNaN(value) ? value : Number(value);
-    });
-    json.experiment = document.getElementById("experiment").value;
-    fetch("/train", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(json)
-      }).then(() => {
-        fetchTrainStatus();
-      }).catch(() => {
-        document.getElementById('train-state').innerHTML = '<span class="text-danger">Training error</span>';
-      });
-    });
-
-  function updateField(id, newValue) {
+    function updateField(id, newValue) {
       const el = document.getElementById(id);
       if (el && el.textContent !== String(newValue)) {
         el.textContent = newValue;
@@ -628,23 +704,26 @@
     markStage(data.stage);
   });
 
-  let lastCattleData = {}; 
 
   socket.on("cattle_update", data => {
     const c = data.data[0];
-    lastCattleData = c; 
-    const table = document.querySelector("#cattle-table tbody");
+    lastCattleData = c;
+    updatePredictionTable(c);
 
+
+    // Update entity table (same as before)
+    const table = document.querySelector("#cattle-table tbody");
     for (const row of table.rows) {
       const attr = row.getAttribute("data-attr");
       const cell = row.querySelector(".value-cell");
-
       if (c[attr] && c[attr].value !== undefined) {
         const value = c[attr].value;
         cell.textContent = value;
         applyCattleColor(cell, attr, value);
       }
     }
+
+    // Update health cards
     function updateHealthCard(attr, value, thresholds, cardId, descId) {
       const card = document.getElementById(cardId);
       const desc = document.getElementById(descId);
@@ -672,81 +751,28 @@
     updateHealthCard("activity_ratio", c.activity_ratio?.value, cattleThresholds.activity_ratio, "card-activity", "desc-activity");
     updateHealthCard("eating_efficiency", c.eating_efficiency?.value, cattleThresholds.eating_efficiency, "card-eating", "desc-eating");
     updateHealthCard("vital_sign_index", c.vital_sign_index?.value, cattleThresholds.vital_sign_index, "card-vital", "desc-vital");
+
+    // Real-time predictions
+    updatePredictionTable(c);
   });
 
-    function resetCattleHistory() {
-      if (!confirm("Are you sure you want to remove the history?.")) {
-        return;
-      }
 
-      fetch("/reset-cattle-history", { method: "POST" })
-        .then(res => res.json())
-        .then(data => {
-          alert(`${data.deleted_count} entries deleted.`);
-          location.reload(); // Opcional: recarga la página para refrescar el historial
-        })
-        .catch(err => {
-          console.error("error during history removal:", err);
-          alert("Error during history removal.");
-        });
+  function resetCattleHistory() {
+    if (!confirm("Are you sure you want to remove the history?.")) {
+      return;
     }
 
-  document.getElementById("simulate-form").addEventListener("submit", function(e) {
-    e.preventDefault();
-    const start = document.getElementById("startDate").value;
-    const end = document.getElementById("endDate").value;
-    const count = document.getElementById("count").value;
-    const name = document.getElementById("experimentName").value;
-    fetch("/simulate-data", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ start, end, count, name })    })
-    .then(async res => {
-    const text = await res.text();  // <- leer como texto primero
-    try {
-      const json = JSON.parse(text); // intenta parsear
-      if (!res.ok) throw new Error(json.message || "Error desconocido del servidor");
-      return json;
-    } catch (e) {
-      throw new Error("Not valid response: " + text);
-    }
-    })
-    .then(data => {
-      showToast(`Inserted experiment: ${name}`, "bg-success");
-      loadExperiments();  // refresca el dropdown
-    })
-
-  });
-
-  function loadExperiments() {
-    fetch("/get-experiments")
+    fetch("/reset-cattle-history", { method: "POST" })
       .then(res => res.json())
       .then(data => {
-        const select = document.getElementById("experiment");
-        select.innerHTML = '<option value="">-- Select one --</option>';
-        data.forEach(exp => {
-          select.innerHTML += `<option value="${exp.name}">${exp.name} (${exp.start} → ${exp.end})</option>`;
-        });
+        alert(`${data.deleted_count} entries deleted.`);
+        location.reload(); // Opcional: recarga la página para refrescar el historial
+      })
+      .catch(err => {
+        console.error("error during history removal:", err);
+        alert("Error during history removal.");
       });
   }
-
-  document.addEventListener("DOMContentLoaded", loadExperiments);
-
-  function loadModelRuns() {
-    fetch("/mlflow-runs")
-      .then(res => res.json())
-      .then(data => {
-        const select = document.getElementById("predict-model");
-        select.innerHTML = '<option value="">-- Select a model --</option>';
-        data.forEach(run => {
-          const name = run.run_name || run.algorithm;
-          select.innerHTML += `<option value="${run.run_id}">${name} (${run.start_time})</option>`;
-        });
-      });
-  }
-
-  document.addEventListener("DOMContentLoaded", loadModelRuns);
-
 
   function deleteSelectedExperiment() {
     const select = document.getElementById("experiment");
@@ -777,44 +803,6 @@
         alert("Error connecting to the server.");
       });
   }
-  
-  document.getElementById("predict-form").addEventListener("submit", function (e) {
-  e.preventDefault();
-
-  const runId = document.getElementById("predict-model").value;
-  if (!runId || !lastCattleData.activity_ratio || !lastCattleData.eating_efficiency || !lastCattleData.vital_sign_index) {
-    alert("Not data or model to make prediction.");
-    return;
-  }
-
-  const cow = {
-    activity_ratio: lastCattleData.activity_ratio.value,
-    eating_efficiency: lastCattleData.eating_efficiency.value,
-    vital_sign_index: lastCattleData.vital_sign_index.value
-  };
-
-  fetch("/predict-cattle", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ run_id: runId, cow })
-  })
-    .then(res => res.json())
-    .then(data => {
-      if (data.status === "ok") {
-        showToast(`Prediction: ${data.prediction} (${(data.confidence * 100).toFixed(1)}%)`, "bg-info");
-      } else {
-        alert("Error during prediction: " + data.message);
-      }
-    })
-    .catch(err => {
-      console.error("❌ Error:", err);
-      alert("❌Error connecting to server.");
-    });
-});
-
-
-
   </script>
-  <div class="toast-container position-fixed top-0 end-0 p-3" id="toast-container"></div>
-  </body>
+</body>
 </html>
