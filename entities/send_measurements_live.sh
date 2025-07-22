@@ -6,11 +6,21 @@ echo -e "📡 Starting data simulation from CSV..."
 csv_file="cattle_dataset_shuffled.csv"
 cow_names=("Mucca" "Charcoal" "Fawn" "Harvest" "Titch" "Silhouette" "Palm" "Brunette" "Annabelle" "Ursula")
 
-start_date="2024-07-01 00:00:00"  # <-- no 'T' or 'Z'
-interval_seconds=$((365 * 24 * 60 * 60 / $(wc -l < "$csv_file")))
+# 📅 Use current UTC time as end, and one year before that as start
+end_ts=$(date -u +%s)
+start_ts=$(( end_ts - 365*24*60*60 ))
+
+end_date=$(date -u -d "@$end_ts" +%Y-%m-%dT%H:%M:%SZ)
+start_date=$(date -u -d "@$start_ts" +%Y-%m-%dT%H:%M:%SZ)
+
+echo "Generating data from $start_date to $end_date"
+
+line_count=$(wc -l < "$csv_file")
+interval_seconds=$(( (end_ts - start_ts) / line_count ))
+
+current_ts=$start_ts
 
 
-current_ts=$(date -u -d "$start_date" +%s)
 tail -n +2 "$csv_file" | while IFS=',' read -r body_temperature breed_type milk_production respiratory_rate \
   walking_capacity sleeping_duration body_condition_score heart_rate \
   eating_duration lying_down_duration ruminating rumen_fill faecal_consistency \
@@ -60,3 +70,4 @@ EOF
 done
 
 echo -e "✅ Finished sending simulated data."
+curl -X POST http://train:4000/mark-initialized

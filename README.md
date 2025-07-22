@@ -11,12 +11,17 @@ http://localhost:4000
 ```
 The app will take some seconds to start, and create the historical data for working with the models.
 
+Historical data will be created upon start, including data from the 10 different cattle measured in the past year.
+
+You can train your models selecting data from this time span.
+
 In the dashboard you will have access to:
   - Train different ML models with historical data.
   - Watch in real time the updates on the measurements of the different cows.
   - Watch in real time the predictions made by the models you trained.
   - See the different subscriptions created to communicate with the context broker (Orion-LD).
   - Access MLFlow for further analysis of the models.
+
 
 ## Data Augmentation with Oversampling
 

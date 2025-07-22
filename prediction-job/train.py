@@ -38,6 +38,7 @@ from dateutil import parser
 ORION_URL = "http://orion:1026/ngsi-ld/v1"
 output_dir = "/mlflow/static_artifacts"
 os.makedirs(output_dir, exist_ok=True)
+initializing = True
 
 # Cliente hacia mongo-history
 history_client = MongoClient("mongodb://root:example@mongo_history:27017/")
@@ -597,6 +598,33 @@ def predict_cattle():
 @app.route("/static_artifacts/<filename>")
 def static_artifacts(filename):
     return send_from_directory("/mlflow/static_artifacts", filename)
+
+@app.route("/history-range")
+def history_range():
+    try:
+        oldest = history_collection.find_one(sort=[("timestamp", 1)])
+        newest = history_collection.find_one(sort=[("timestamp", -1)])
+
+        if not oldest or not newest:
+            return jsonify({"error": "No historical data"}), 404
+
+        return jsonify({
+            "start": oldest["timestamp"].strftime("%Y-%m-%d"),
+            "end": newest["timestamp"].strftime("%Y-%m-%d")
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/init-status")
+def init_status():
+    return jsonify({"initializing": initializing})
+
+@app.route("/mark-initialized", methods=["POST"])
+def mark_initialized():
+    global initializing
+    initializing = False
+    return "", 204
+
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=4000, allow_unsafe_werkzeug=True)
