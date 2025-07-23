@@ -202,17 +202,42 @@ def train(**params):
     train_data, test_data = train_test_split(df, test_size=0.2, random_state=40)
 
     # Build model
+    def to_bool(val):
+        if isinstance(val, bool):
+            return val
+        return str(val).lower() in ("true", "1", "yes")
+
     model_params = {}
+
     if algorithm == "RandomForest":
-        model_params["n_estimators"] = int(params.get("n_estimators", 10))
-        model_params["max_depth"] = int(params.get("max_depth", 8))
+        model_params["n_estimators"] = int(params.get("n_estimators", 100))
+        model_params["max_depth"] = int(params.get("max_depth", 10))
+        model_params["min_samples_split"] = int(params.get("min_samples_split", 2))
+        model_params["min_samples_leaf"] = int(params.get("min_samples_leaf", 1))
+        model_params["max_features"] = params.get("max_features", "auto")
+        model_params["bootstrap"] = to_bool(params.get("bootstrap", True))
+        model_params["criterion"] = params.get("criterion", "gini")
+
     elif algorithm == "DecisionTree":
-        model_params["max_depth"] = int(params.get("max_depth", 8))
+        model_params["max_depth"] = int(params.get("max_depth", 10))
+        model_params["min_samples_split"] = int(params.get("min_samples_split", 2))
+        model_params["min_samples_leaf"] = int(params.get("min_samples_leaf", 1))
+        model_params["max_features"] = params.get("max_features", "auto")
+        model_params["criterion"] = params.get("criterion", "gini")
+
     elif algorithm == "LogisticRegression":
         model_params["max_iter"] = int(params.get("max_iter", 100))
         model_params["C"] = float(params.get("c", 1.0))
+        model_params["penalty"] = params.get("penalty", "l2")
+        model_params["solver"] = params.get("solver", "lbfgs")
+        model_params["fit_intercept"] = to_bool(params.get("fit_intercept", True))
+    
+    elif algorithm == "NaiveBayes":
+        model_params["var_smoothing"] = float(params.get("var_smoothing", 1e-9))
+
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
+
 
     mlflow.set_tracking_uri("http://mlflow-server:5000")
     mlflow.set_experiment("FIWARE_MLOPS_TINYML")

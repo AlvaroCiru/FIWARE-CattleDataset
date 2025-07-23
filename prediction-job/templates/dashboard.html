@@ -6,6 +6,7 @@
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script> 
   <title>FIWARE MLOps Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <style>
     .value-green { background-color: #d4edda !important; }
@@ -75,6 +76,7 @@
         <option value="RandomForest">Random Forest</option>
         <option value="DecisionTree">Decision Tree</option>
         <option value="LogisticRegression">Logistic Regression</option>
+        <option value="NaiveBayes">Naive Bayes</option>
       </select>
     </div>
 
@@ -259,6 +261,25 @@
     let trainedModels = [];
     let lastCattleData = {};
 
+    function initTooltips() {
+      const tooltips = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      tooltips.map(t => new bootstrap.Tooltip(t));
+    }
+
+    function checkInitStatus() {
+        fetch("/init-status")
+          .then(res => res.json())
+          .then(data => {
+            if (!data.initializing) {
+              document.getElementById("loading-overlay").style.display = "none";
+            } else {
+              setTimeout(checkInitStatus, 1000);
+            }
+          })
+          .catch(() => setTimeout(checkInitStatus, 2000)); // Retry if API fails
+      }
+
+
     document.addEventListener("DOMContentLoaded", () => {
       const predictionTable = document.querySelector("#prediction-table");
       const end = new Date(); // today
@@ -341,19 +362,6 @@
 
       loadModels();
       
-      function checkInitStatus() {
-        fetch("/init-status")
-          .then(res => res.json())
-          .then(data => {
-            if (!data.initializing) {
-              document.getElementById("loading-overlay").style.display = "none";
-            } else {
-              setTimeout(checkInitStatus, 1000);
-            }
-          })
-          .catch(() => setTimeout(checkInitStatus, 2000)); // Retry if API fails
-      }
-      checkInitStatus();
     });
 
 
@@ -370,36 +378,187 @@
     document.getElementById('algorithm').addEventListener('change', function () {
       const container = document.getElementById('params-container');
       const selected = this.value;
-      container.innerHTML = '';
+      container.innerHTML = ''; // clear
 
       if (selected === 'RandomForest') {
-        container.innerHTML += `
+      container.innerHTML = `
+        <div class="mb-3">
+          <label class="form-label">
+            n_estimators 
+            <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Number of trees in the forest. More trees can improve performance but increase computation time."></i>
+          </label>
+          <input type="number" class="form-control" name="n_estimators" value="100">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">
+            max_depth 
+            <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Maximum depth of a tree. Controls overfitting; deeper trees can capture more complexity."></i>
+          </label>
+          <input type="number" class="form-control" name="max_depth" value="10">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">
+            min_samples_split 
+            <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Minimum samples required to split an internal node. Higher values prevent overfitting."></i>
+          </label>
+          <input type="number" class="form-control" name="min_samples_split" value="2">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">
+            min_samples_leaf 
+            <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Minimum samples required to be at a leaf node. Larger values smooth the model."></i>
+          </label>
+          <input type="number" class="form-control" name="min_samples_leaf" value="1">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">
+            max_features 
+            <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Number of features to consider when looking for the best split. 'sqrt' is usually a good default."></i>
+          </label>
+          <select class="form-select" name="max_features">
+            <option value="auto">auto</option>
+            <option value="sqrt">sqrt</option>
+            <option value="log2">log2</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">
+            bootstrap 
+            <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Whether bootstrap samples are used when building trees. True means sampling with replacement."></i>
+          </label>
+          <select class="form-select" name="bootstrap">
+            <option value="true">true</option>
+            <option value="false">false</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">
+            criterion 
+            <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Function to measure the quality of a split. 'gini' and 'entropy' are standard."></i>
+          </label>
+          <select class="form-select" name="criterion">
+            <option value="gini">gini</option>
+            <option value="entropy">entropy</option>
+            <option value="log_loss">log_loss</option>
+          </select>
+        </div>`;
+
+        initTooltips();
+
+      } else if (selected === 'DecisionTree') {
+        container.innerHTML = `
           <div class="mb-3">
-            <label class="form-label">n_estimators</label>
-            <input type="number" class="form-control" name="n_estimators" value="10">
+            <label class="form-label">
+              max_depth
+              <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Maximum depth of the tree. Shallower trees are simpler and less likely to overfit."></i>
+            </label>
+            <input type="number" class="form-control" name="max_depth" value="10">
           </div>
           <div class="mb-3">
-            <label class="form-label">max_depth</label>
-            <input type="number" class="form-control" name="max_depth" value="8">
-          </div>`;
-      } else if (selected === 'DecisionTree') {
-        container.innerHTML += `
+            <label class="form-label">
+              min_samples_split
+              <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Minimum number of samples required to split an internal node. Higher values make the tree more conservative."></i>
+            </label>
+            <input type="number" class="form-control" name="min_samples_split" value="2">
+          </div>
           <div class="mb-3">
-            <label class="form-label">max_depth</label>
-            <input type="number" class="form-control" name="max_depth" value="8">
+            <label class="form-label">
+              min_samples_leaf
+              <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Minimum number of samples required at a leaf node. Larger values result in more regularized trees."></i>
+            </label>
+            <input type="number" class="form-control" name="min_samples_leaf" value="1">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">
+              max_features
+              <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Number of features to consider when looking for the best split. Controls the randomness of the tree."></i>
+            </label>
+            <select class="form-select" name="max_features">
+              <option value="auto">auto</option>
+              <option value="sqrt">sqrt</option>
+              <option value="log2">log2</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">
+              criterion
+              <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Function to measure the quality of a split. 'gini' and 'entropy' are most common."></i>
+            </label>
+            <select class="form-select" name="criterion">
+              <option value="gini">gini</option>
+              <option value="entropy">entropy</option>
+              <option value="log_loss">log_loss</option>
+            </select>
           </div>`;
+        
+        initTooltips();  
       } else if (selected === 'LogisticRegression') {
-        container.innerHTML += `
+        container.innerHTML = `
           <div class="mb-3">
-            <label class="form-label">max_iter</label>
+            <label class="form-label">
+              max_iter
+              <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Maximum number of iterations taken for the solvers to converge."></i>
+            </label>
             <input type="number" class="form-control" name="max_iter" value="100">
           </div>
           <div class="mb-3">
-            <label class="form-label">C</label>
+            <label class="form-label">
+              C
+              <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Inverse of regularization strength. Smaller values mean stronger regularization."></i>
+            </label>
             <input type="number" class="form-control" name="c" value="1.0" step="0.1">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">
+              penalty
+              <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Specifies the norm used in the penalization. Choose according to the selected solver."></i>
+            </label>
+            <select class="form-select" name="penalty">
+              <option value="l2">l2</option>
+              <option value="l1">l1</option>
+              <option value="elasticnet">elasticnet</option>
+              <option value="none">none</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">
+              solver
+              <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Algorithm to use in the optimization problem. Some solvers support only certain penalties."></i>
+            </label>
+            <select class="form-select" name="solver">
+              <option value="lbfgs">lbfgs</option>
+              <option value="liblinear">liblinear</option>
+              <option value="saga">saga</option>
+              <option value="newton-cg">newton-cg</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">
+              fit_intercept
+              <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Specifies whether to add a constant (bias) to the decision function."></i>
+            </label>
+            <select class="form-select" name="fit_intercept">
+              <option value="true">true</option>
+              <option value="false">false</option>
+            </select>
           </div>`;
+        
+        initTooltips(); 
+      } else if (selected === 'NaiveBayes') {
+        container.innerHTML = `
+          <div class="mb-3">
+            <label class="form-label">
+              var_smoothing
+              <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Portion of the largest variance added to all variances for numerical stability. Helps prevent divide-by-zero errors."></i>
+            </label>
+            <input type="number" step="any" class="form-control" name="var_smoothing" value="1e-9">
+          </div>`;
+
+        initTooltips(); 
       }
+
     });
+
 
     document.getElementById('train-form').addEventListener('submit', async function(e) {
       e.preventDefault();
@@ -848,6 +1007,9 @@
         alert("Error connecting to the server.");
       });
   }
+  
+  checkInitStatus();
+
   </script>
 </body>
 </html>
